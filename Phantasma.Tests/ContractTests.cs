@@ -2549,6 +2549,40 @@ namespace Phantasma.Tests
                     .SpendGas(owner.Address).EndScript());
             var block = simulator.EndBlock().First();
         }
+        
+        [TestMethod]
+        public void TestPrintMoneyWithoutPermission()
+        {
+            var owner = PhantasmaKeys.Generate();
+
+            var nexus = new Nexus("simnet", null, null);
+            nexus.SetOracleReader(new OracleSimulator(nexus));
+            var simulator = new NexusSimulator(nexus, owner, 1234);
+
+            var fuelToken = DomainSettings.FuelTokenSymbol;
+            var stakingToken = DomainSettings.StakingTokenSymbol;
+
+            //Let A be an address
+            var testUserA = PhantasmaKeys.Generate();
+
+            simulator.BeginBlock();
+            simulator.GenerateTransfer(owner, testUserA.Address, nexus.RootChain, fuelToken, 100000000);
+            simulator.GenerateTransfer(owner, testUserA.Address, nexus.RootChain, stakingToken, 100000000);
+            simulator.EndBlock();
+
+            var balanceBefore = nexus.RootChain.GetTokenBalance(simulator.Nexus.RootStorage, stakingToken, testUserA.Address);
+            
+            simulator.BeginBlock();
+            simulator.GenerateCustomTransaction(testUserA, ProofOfWork.Minimal, () =>
+                ScriptUtils.BeginScript().AllowGas(testUserA.Address, Address.Null, 1, 9999)
+                    .CallInterop("Runtime.MintTokens", "S3dP2jjf1jUG9nethZBWbnu9a6dFqB7KveTWU7znis6jpDy", testUserA.Address, stakingToken, 100000000).
+                    SpendGas(testUserA.Address).EndScript());
+            simulator.EndBlock();
+
+            var balanceAfter = nexus.RootChain.GetTokenBalance(simulator.Nexus.RootStorage, stakingToken, testUserA.Address);
+            Assert.IsTrue(balanceAfter == balanceBefore );
+            Assert.IsFalse(balanceAfter == balanceBefore + 100000000);
+        }
 
     }
 }
